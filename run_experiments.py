@@ -1,3 +1,3 @@
-from scripts import run_rbf_comparison
+from scripts.run_rbf_comparison import run_rbf_comparison
 
 run_rbf_comparison()

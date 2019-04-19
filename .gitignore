@@ -2,4 +2,6 @@ data/
 output/
 *.pyc
 *.gz
-*ipynb_checkpoints/*
+scripts/.ipynb_checkpoints/
+sandbox/
+.ipynb_checkpoints/
