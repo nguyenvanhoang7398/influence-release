@@ -1,7 +1,7 @@
-from . import gen_inception_features
+# from . import gen_inception_features
 from . import load_animals
-from . import load_mnist
-from . import load_spam
+# from . import load_mnist
+# from . import load_spam
 # from . import run_components_experiment
 # from . import run_data_poisoning_indiv
 # from . import run_data_poisoning_multiple

@@ -3,6 +3,7 @@ from __future__ import print_function
 from __future__ import absolute_import
 from __future__ import unicode_literals  
 
+import pickle
 import math
 import copy
 import numpy as np
@@ -58,6 +59,9 @@ def run_rbf_comparison():
     Y_train = np.copy(image_data_sets.train.labels) * 2 - 1
     Y_test = np.copy(image_data_sets.test.labels) * 2 - 1
 
+    # X_train, X_test = X_train[:10], X_test[-2:]
+    # Y_train, Y_test = Y_train[:10], Y_test[-2:]
+
     num_train = X_train.shape[0]
     num_test = X_test.shape[0]
 
@@ -74,7 +78,7 @@ def run_rbf_comparison():
 
     ### Compare top 5 influential examples from each network
 
-    test_idx = 0
+    test_idxs = range(len(num_test))
 
     ## RBF
 
@@ -89,8 +93,8 @@ def run_rbf_comparison():
 
     tf.reset_default_graph()
 
-    X_train = image_data_sets.train.x
-    Y_train = image_data_sets.train.labels * 2 - 1
+    # X_train = image_data_sets.train.x
+    # Y_train = image_data_sets.train.labels * 2 - 1
     train = DataSet(L_train, Y_train)
     test = DataSet(L_test, Y_test)
 
@@ -139,128 +143,146 @@ def run_rbf_comparison():
     params_feed_dict[rbf_model.W_placeholder] = hinge_W
     rbf_model.sess.run(rbf_model.set_params_op, feed_dict=params_feed_dict)
 
-    rbf_predicted_loss_diffs = rbf_model.get_influence_on_test_loss(
-        [test_idx], 
-        np.arange(len(rbf_model.data_sets.train.labels)),
-        force_refresh=True)
+
+    # ## Inception
+
+    # dataset_name = 'dogfish_900_300'
+
+    # # Generate inception features
+    # img_side = 299
+    # num_channels = 3
+    # num_train_ex_per_class = 900
+    # num_test_ex_per_class = 300
+    # batch_size = 100
 
 
-    ## Inception
+    # tf.reset_default_graph()
+    # full_model_name = '%s_inception' % dataset_name
+    # full_model = BinaryInceptionModel(
+    #     img_side=img_side,
+    #     num_channels=num_channels,
+    #     weight_decay=weight_decay,
+    #     num_classes=num_classes, 
+    #     batch_size=batch_size,
+    #     data_sets=image_data_sets,
+    #     initial_learning_rate=initial_learning_rate,
+    #     keep_probs=keep_probs,
+    #     decay_epochs=decay_epochs,
+    #     mini_batch=True,
+    #     train_dir='output',
+    #     log_dir='log',
+    #     model_name=full_model_name)
 
-    dataset_name = 'dogfish_900_300'
+    # train_inception_features_val = generate_inception_features(
+    #     full_model, 
+    #     image_data_sets.train.x, 
+    #     image_data_sets.train.labels, 
+    #     batch_size=batch_size)        
+    # test_inception_features_val = generate_inception_features(
+    #     full_model, 
+    #     image_data_sets.test.x, 
+    #     image_data_sets.test.labels, 
+    #     batch_size=batch_size)  
 
-    # Generate inception features
-    img_side = 299
-    num_channels = 3
-    num_train_ex_per_class = 900
-    num_test_ex_per_class = 300
-    batch_size = 100
+    # train = DataSet(
+    #     train_inception_features_val,
+    #     image_data_sets.train.labels)
+    # test = DataSet(
+    #     test_inception_features_val,
+    #     image_data_sets.test.labels)
 
+    # # train_f = np.load('output/%s_inception_features_new_train.npz' % dataset_name)
+    # # train = DataSet(train_f['inception_features_val'], train_f['labels'])
+    # # test_f = np.load('output/%s_inception_features_new_test.npz' % dataset_name)
+    # # test = DataSet(test_f['inception_features_val'], test_f['labels'])
 
-    tf.reset_default_graph()
-    full_model_name = '%s_inception' % dataset_name
-    full_model = BinaryInceptionModel(
-        img_side=img_side,
-        num_channels=num_channels,
-        weight_decay=weight_decay,
-        num_classes=num_classes, 
-        batch_size=batch_size,
-        data_sets=image_data_sets,
-        initial_learning_rate=initial_learning_rate,
-        keep_probs=keep_probs,
-        decay_epochs=decay_epochs,
-        mini_batch=True,
-        train_dir='output',
-        log_dir='log',
-        model_name=full_model_name)
-
-    train_inception_features_val = generate_inception_features(
-        full_model, 
-        image_data_sets.train.x, 
-        image_data_sets.train.labels, 
-        batch_size=batch_size)        
-    test_inception_features_val = generate_inception_features(
-        full_model, 
-        image_data_sets.test.x, 
-        image_data_sets.test.labels, 
-        batch_size=batch_size)  
-
-    train = DataSet(
-        train_inception_features_val,
-        image_data_sets.train.labels)
-    test = DataSet(
-        test_inception_features_val,
-        image_data_sets.test.labels)
-
-    # train_f = np.load('output/%s_inception_features_new_train.npz' % dataset_name)
-    # train = DataSet(train_f['inception_features_val'], train_f['labels'])
-    # test_f = np.load('output/%s_inception_features_new_test.npz' % dataset_name)
-    # test = DataSet(test_f['inception_features_val'], test_f['labels'])
-
-    validation = None
-
-    data_sets = base.Datasets(train=train, validation=validation, test=test)
-
-    # train_f = np.load('output/%s_inception_features_new_train.npz' % dataset_name)
-    # train = DataSet(train_f['inception_features_val'], train_f['labels'])
-    # test_f = np.load('output/%s_inception_features_new_test.npz' % dataset_name)
-    # test = DataSet(test_f['inception_features_val'], test_f['labels'])
     # validation = None
 
     # data_sets = base.Datasets(train=train, validation=validation, test=test)
 
-    input_dim = 2048
-    weight_decay = 0.001
-    batch_size = 1000
-    initial_learning_rate = 0.001 
-    keep_probs = None
-    decay_epochs = [1000, 10000]
-    max_lbfgs_iter = 1000
-    num_classes = 2
+    # # train_f = np.load('output/%s_inception_features_new_train.npz' % dataset_name)
+    # # train = DataSet(train_f['inception_features_val'], train_f['labels'])
+    # # test_f = np.load('output/%s_inception_features_new_test.npz' % dataset_name)
+    # # test = DataSet(test_f['inception_features_val'], test_f['labels'])
+    # # validation = None
 
-    tf.reset_default_graph()
+    # # data_sets = base.Datasets(train=train, validation=validation, test=test)
 
-    inception_model = BinaryLogisticRegressionWithLBFGS(
-        input_dim=input_dim,
-        weight_decay=weight_decay,
-        max_lbfgs_iter=max_lbfgs_iter,
-        num_classes=num_classes, 
-        batch_size=batch_size,
-        data_sets=data_sets,
-        initial_learning_rate=initial_learning_rate,
-        keep_probs=keep_probs,
-        decay_epochs=decay_epochs,
-        mini_batch=False,
-        train_dir='output',
-        log_dir='log',
-        model_name='%s_inception_onlytop' % dataset_name)
+    # input_dim = 2048
+    # weight_decay = 0.001
+    # batch_size = 1000
+    # initial_learning_rate = 0.001 
+    # keep_probs = None
+    # decay_epochs = [1000, 10000]
+    # max_lbfgs_iter = 1000
+    # num_classes = 2
 
-    inception_model.train()
+    # tf.reset_default_graph()
 
-    inception_predicted_loss_diffs = inception_model.get_influence_on_test_loss(
-        [test_idx], 
-        np.arange(len(inception_model.data_sets.train.labels)),
-        force_refresh=True)
+    # inception_model = BinaryLogisticRegressionWithLBFGS(
+    #     input_dim=input_dim,
+    #     weight_decay=weight_decay,
+    #     max_lbfgs_iter=max_lbfgs_iter,
+    #     num_classes=num_classes, 
+    #     batch_size=batch_size,
+    #     data_sets=data_sets,
+    #     initial_learning_rate=initial_learning_rate,
+    #     keep_probs=keep_probs,
+    #     decay_epochs=decay_epochs,
+    #     mini_batch=False,
+    #     train_dir='output',
+    #     log_dir='log',
+    #     model_name='%s_inception_onlytop' % dataset_name)
 
-    x_test = X_test[test_idx, :]
-    y_test = Y_test[test_idx]
+    # inception_model.train()
 
+    # inception_predicted_loss_diffs = inception_model.get_influence_on_test_loss(
+    #     [test_idx], 
+    #     np.arange(len(inception_model.data_sets.train.labels)),
+    #     force_refresh=True)
 
-    distances = dataset.find_distances(x_test, X_train)
-    flipped_idx = Y_train != y_test
+    x_test = [X_test[i] for i in test_idxs]
+    y_test = [Y_test[i] for i in test_idxs]
+
+    distances, flipped_idxs = {}, {}
+    for test_idx in test_idxs:
+        x_test = X_test[test_idx, :]
+        y_test = Y_test[test_idx]
+        distances[test_idx] = dataset.find_distances(x_test, X_train)
+        flipped_idxs[test_idx] = Y_train != y_test
+    influences = {}
+    for i, test_idx in enumerate(test_idxs):
+        rbf_predicted_loss_diffs = rbf_model.get_influence_on_test_loss(
+            [test_idx],
+            np.arange(len(rbf_model.data_sets.train.labels)),
+            force_refresh=True)
+        influences[test_idx] = rbf_predicted_loss_diffs
     rbf_margins_test = rbf_model.sess.run(rbf_model.margin, feed_dict=rbf_model.all_test_feed_dict)
     rbf_margins_train = rbf_model.sess.run(rbf_model.margin, feed_dict=rbf_model.all_train_feed_dict)
-    inception_Y_pred_correct = get_Y_pred_correct_inception(inception_model)
+    # inception_Y_pred_correct = get_Y_pred_correct_inception(inception_model)
 
 
-    np.savez(
-        'output/rbf_results', 
-        test_idx=test_idx,
-        distances=distances,
-        flipped_idx=flipped_idx,
-        rbf_margins_test=rbf_margins_test,
-        rbf_margins_train=rbf_margins_train,
-        inception_Y_pred_correct=inception_Y_pred_correct,
-        rbf_predicted_loss_diffs=rbf_predicted_loss_diffs,
-        inception_predicted_loss_diffs=inception_predicted_loss_diffs
-    )
+    # np.savez(
+    #     'output/rbf_results', 
+    #     test_idxs=test_idxs,
+    #     distances=distances,
+    #     flipped_idxs=flipped_idxs,
+    #     rbf_margins_test=rbf_margins_test,
+    #     rbf_margins_train=rbf_margins_train,
+    #     inception_Y_pred_correct=None,
+    #     influences=influences,
+    #     inception_predicted_loss_diffs=None,
+    #     hinge_W=hinge_W
+    # )
+
+    result = {
+        'test_idxs': test_idxs,
+        'distances': distances,
+        'flipped_idxs': flipped_idxs,
+        'rbf_margins_test': rbf_margins_test,
+        'rbf_margins_train': rbf_margins_train,
+        'influences': influences,
+        'hinge_W': hinge_W
+    }
+
+    pickle.dump(result, open('output/rbf_results.p', 'wb'))
