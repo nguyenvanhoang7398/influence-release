@@ -173,7 +173,7 @@ class LogisticRegressionWithLBFGS(GenericNeuralNet):
             if verbose: print('Using model minus one')
             model = self.sklearn_model_minus_one
         else:
-            raise ValueError, "feed_dict has incorrect number of training examples"
+            raise(ValueError, "feed_dict has incorrect number of training examples")
 
         # print(X_train)
         # print(Y_train)

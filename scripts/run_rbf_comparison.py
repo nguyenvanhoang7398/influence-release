@@ -14,7 +14,7 @@ import scipy.linalg as slin
 import scipy.sparse.linalg as sparselin
 import scipy.sparse as sparse
 
-from load_animals import load_animals
+from scripts.load_animals import load_animals
 
 import tensorflow as tf
 from tensorflow.contrib.learn.python.learn.datasets import base

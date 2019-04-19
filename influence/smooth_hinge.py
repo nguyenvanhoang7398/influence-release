@@ -9,8 +9,6 @@ import sys
 import numpy as np
 import pandas as pd
 from sklearn import linear_model, preprocessing, cluster, svm
-import matplotlib.pyplot as plt
-import seaborn as sns
 import scipy.linalg as slin
 import scipy.sparse.linalg as sparselin
 import scipy.sparse as sparse 
@@ -252,7 +250,7 @@ class SmoothHinge(GenericNeuralNet):
             print('Using model minus one')
             model = self.svm_model_minus_one
         else:
-            raise ValueError, "feed_dict has incorrect number of training examples"
+            raise(ValueError, "feed_dict has incorrect number of training examples")
 
         model.fit(X_train, Y_train)
         # sklearn returns coefficients in shape num_classes x num_features

@@ -111,11 +111,13 @@ def load_animals(num_train_ex_per_class=300,
             num_filled = 0
             while num_filled < num_train_ex_per_class:        
                 img_path = os.path.join(BASE_DIR, '%s/%s_%s.JPEG' % (class_string, class_string, i))
-                print(img_path)
+                # print(img_path)
                 if os.path.exists(img_path):
                     fill(X_train, Y_train, num_filled + (num_train_ex_per_class * class_idx), class_idx, img_path, img_side)
                     num_filled += 1
                     print(num_filled)
+                else:
+                    raise Exception("Path not found.")
                 i += 1
 
             num_filled = 0

@@ -78,7 +78,7 @@ def generate_inception_features(model, poisoned_X_train_subset, labels_subset, b
     poisoned_data_sets.train.reset_batch()
 
     inception_features_val = []
-    for i in xrange(num_iter):
+    for i in range(num_iter):
         feed_dict = model.fill_feed_dict_with_batch(poisoned_data_sets.train, batch_size=batch_size)
         inception_features_val_temp = model.sess.run(model.inception_features, feed_dict=feed_dict)
         inception_features_val.append(inception_features_val_temp)
