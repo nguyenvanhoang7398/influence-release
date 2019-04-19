@@ -73,7 +73,7 @@ for data_set, label in [
     num_iter = int(num_examples / batch_size)
 
     inception_features_val = []
-    for i in xrange(num_iter):
+    for i in range(num_iter):
         feed_dict = model.fill_feed_dict_with_batch(data_set, batch_size=batch_size)
         inception_features_val_temp = model.sess.run(model.inception_features, feed_dict=feed_dict)
         inception_features_val.append(inception_features_val_temp)

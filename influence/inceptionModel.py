@@ -233,7 +233,7 @@ class BinaryInceptionModel(GenericNeuralNet):
         batch_feed_dict = {}
         batch_feed_dict[K.learning_phase()] = 0
 
-        for i in xrange(num_iter):
+        for i in range(num_iter):
             start = i * batch_size
             end = (i+1) * batch_size
             if end > num_examples:

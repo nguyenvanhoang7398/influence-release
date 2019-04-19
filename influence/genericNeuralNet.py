@@ -269,7 +269,7 @@ class GenericNeuralNet(object):
         self.reset_datasets()
 
         ret = []
-        for i in xrange(num_iter):
+        for i in range(num_iter):
             feed_dict = self.fill_feed_dict_with_batch(data_set)
             ret_temp = self.sess.run(ops, feed_dict=feed_dict)
             
@@ -323,7 +323,7 @@ class GenericNeuralNet(object):
 
 
     def retrain(self, num_steps, feed_dict):        
-        for step in xrange(num_steps):   
+        for step in range(num_steps):   
             self.sess.run(self.train_op, feed_dict=feed_dict)
 
 
@@ -356,7 +356,7 @@ class GenericNeuralNet(object):
 
         sess = self.sess            
 
-        for step in xrange(num_steps):
+        for step in range(num_steps):
             self.update_learning_rate(step)
 
             start_time = time.time()
@@ -526,7 +526,7 @@ class GenericNeuralNet(object):
 
         self.reset_datasets()
         hessian_vector_val = None
-        for i in xrange(num_iter):
+        for i in range(num_iter):
             feed_dict = self.fill_feed_dict_with_batch(self.data_sets.train, batch_size=batch_size)
             # Can optimize this
             feed_dict = self.update_feed_dict_with_v_placeholder(feed_dict, v)
