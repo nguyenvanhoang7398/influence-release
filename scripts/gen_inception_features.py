@@ -9,7 +9,7 @@ from influence.dataset import DataSet
 
 from tensorflow.contrib.learn.python.learn.datasets import base
 
-from load_animals import load_animals, load_dogfish_with_koda
+from scripts.load_animals import load_animals, load_dogfish_with_koda
 
 img_side = 299
 num_channels = 3
