@@ -58,9 +58,6 @@ def run_rbf_comparison():
     Y_train = np.copy(image_data_sets.train.labels) * 2 - 1
     Y_test = np.copy(image_data_sets.test.labels) * 2 - 1
 
-    X_train, X_test = X_train[:10], X_test[-2:]
-    Y_train, Y_test = Y_train[:10], Y_test[-2:]
-
     num_train = X_train.shape[0]
     num_test = X_test.shape[0]
 
@@ -92,8 +89,8 @@ def run_rbf_comparison():
 
     tf.reset_default_graph()
 
-    # X_train = image_data_sets.train.x
-    # Y_train = image_data_sets.train.labels * 2 - 1
+    X_train = image_data_sets.train.x
+    Y_train = image_data_sets.train.labels * 2 - 1
     train = DataSet(L_train, Y_train)
     test = DataSet(L_test, Y_test)
 
