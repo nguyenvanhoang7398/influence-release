@@ -194,7 +194,7 @@ class SmoothHinge(GenericNeuralNet):
 
     def train(self):
         if self.temp == 0:
-            self.train_with_svm(self.all_train_feed_dict)
+            return self.train_with_svm(self.all_train_feed_dict)
         else:
             self.train_with_fmin(self.all_train_feed_dict)
             
@@ -269,7 +269,7 @@ class SmoothHinge(GenericNeuralNet):
         if verbose:
             print('SVM training took %s iter.' % model.n_iter_)
             print('After SVM training: ')
-            self.print_model_eval()
+        return self.print_model_eval()
 
         # print('Starting SGD')
         # for step in xrange(100):   

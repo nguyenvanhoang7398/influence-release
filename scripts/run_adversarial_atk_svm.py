@@ -5,7 +5,7 @@ import sklearn.linear_model as linear_model
 from scripts.load_animals import load_animals, load_dogfish_with_koda, load_dogfish_with_orig_and_koda
 import copy
 from sklearn.decomposition import PCA, KernelPCA
-
+import pickle
 import os
 from shutil import copyfile
 
@@ -31,9 +31,15 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
     step_size=1,
     save_iter=1,
     loss_type='normal_loss',
-    early_stop=None):
+    early_stop=None,
+    max_num_to_poison=10):
     # If early_stop is set and it stops early, returns True
     # Otherwise, returns False
+
+    train_acc, test_acc = [], []
+    train_loss, test_loss = [], []
+    grad_means = []
+    metrics_output_path = "output/metrics_{}wd_{}iter.p".format(smooth_hinge.weight_decay, num_iter)
 
     if test_description is None:
         test_description = test_indices
@@ -48,39 +54,53 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
 
     hinge_model_name = hinge.model_name
     smooth_hinge_model_name = smooth_hinge.model_name
+    
+    num_train = len(smooth_hinge.data_sets.train.x)
 
     print('Test idx: %s' % test_indices)
     print('Indices to poison: %s' % indices_to_poison)
 
-    smooth_hinge.update_train_x_y(
-        smooth_hinge.data_sets.train.x[indices_to_poison, :],
-        smooth_hinge.data_sets.train.labels[indices_to_poison])
-    eff_indices_to_poison = np.arange(len(indices_to_poison))
-    labels_subset = smooth_hinge.data_sets.train.labels[eff_indices_to_poison]
+    # smooth_hinge.update_train_x_y(
+    #     smooth_hinge.data_sets.train.x[indices_to_poison, :],
+    #     smooth_hinge.data_sets.train.labels[indices_to_poison])
+    # eff_indices_to_poison = np.arange(len(indices_to_poison))
+    # labels_subset = smooth_hinge.data_sets.train.labels[eff_indices_to_poison]
 
     for attack_iter in range(num_iter):
         print('*** Iter: %s' % attack_iter)
-        
-        print('Calculating grad...')
-
         with smooth_hinge_graph.as_default():
+            grad_influence_wrt_input_val = smooth_hinge.get_grad_of_influence_wrt_input(
+                range(num_train), 
+                test_indices, 
+                force_refresh=False,
+                test_description=test_description,
+                loss_type='normal_loss')
+            indices_to_poison = select_examples_to_attack(
+                    smooth_hinge, 
+                    max_num_to_poison, 
+                    grad_influence_wrt_input_val,
+                    step_size=step_size)
+            print('Poisoning indices', indices_to_poison)
+            print('Calculating grad...')
+            labels_subset = smooth_hinge.data_sets.train.labels[indices_to_poison]
             grad_influence_wrt_input_val_subset = smooth_hinge.get_grad_of_influence_wrt_input(
-                eff_indices_to_poison, 
+                indices_to_poison, 
                 test_indices, 
                 force_refresh=False,
                 test_description=test_description,
                 loss_type=loss_type)
             poisoned_X_train_subset = poison_with_influence_proj_gradient_step(
                 smooth_hinge.data_sets.train.x, 
-                eff_indices_to_poison,
+                indices_to_poison,
                 grad_influence_wrt_input_val_subset,
                 step_size,
                 project_fn)
+            iter_grad_mean = np.mean(grad_influence_wrt_input_val_subset)
         
         with smooth_hinge_graph.as_default():
-            smooth_hinge.update_train_x(poisoned_X_train_subset)
             full_X_train = hinge.data_sets.train.x
             full_X_train[indices_to_poison] = poisoned_X_train_subset
+            smooth_hinge.update_train_x(full_X_train)
             reconstructed_poisoned_X_train_subset = inverse_kernelize_pca(poisoned_X_train_subset)
 
         with hinge_graph.as_default():
@@ -89,7 +109,7 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
         # Retrain model
         print('Training...')
         with hinge_graph.as_default():
-            hinge.train()
+            iter_train_acc, iter_test_acc, iter_train_loss, iter_test_loss = hinge.train()
             hinge_W = hinge.sess.run(hinge.params)[0]
         with smooth_hinge_graph.as_default():
             params_feed_dict = {}
@@ -127,6 +147,14 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
                 attack_iter=attack_iter + 1,
                 test_pred=test_pred,
                 step_size=step_size)
+        
+        train_acc.append(iter_train_acc)
+        test_acc.append(iter_test_acc)
+        train_loss.append(iter_train_loss)
+        test_loss.append(iter_test_loss)
+        grad_means.append(iter_grad_mean)
+        pickle.dump((train_acc, test_acc, train_loss, test_loss, grad_means),
+            open(metrics_output_path, 'wb'))
 
     return False
 
@@ -179,7 +207,7 @@ def poison_with_influence_proj_gradient_step(raw_X_train, indices_to_poison, gra
 
     return poisoned_X_train_subset
 
-def run_adversarial_atk_svm():
+def run_adversarial_atk_svm(weight_decay, num_iter):
     num_classes = 2
     num_train_ex_per_class = 900
     num_test_ex_per_class = 300
@@ -210,7 +238,6 @@ def run_adversarial_atk_svm():
     ## RBF
 
     input_channels = 1
-    weight_decay = 0.001
     batch_size = num_train
     initial_learning_rate = 0.001 
     keep_probs = None
@@ -311,7 +338,8 @@ def run_adversarial_atk_svm():
     # project_fn = lambda x : x
     iterative_attack(raw_train, hinge_rbf_model, rbf_model, hinge_graph, smooth_hinge_graph, project_fn, test_indices, test_description=test_description, 
         indices_to_poison=indices_to_poison,
-        num_iter=2000,
+        num_iter=num_iter,
         step_size=step_size,
         save_iter=500,
-        loss_type='normal_loss')
+        loss_type='normal_loss',
+        max_num_to_poison=max_num_to_poison)

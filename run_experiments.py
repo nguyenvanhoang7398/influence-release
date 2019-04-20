@@ -5,5 +5,6 @@ from scripts.run_adversarial_atk_svm import run_adversarial_atk_svm
 
 # run_rbf_comparison()
 # test_inv_hvp()
-run_adversarial_atk_svm()
+run_adversarial_atk_svm(weight_decay=0.0002, num_iter=1000)
+run_adversarial_atk_svm(weight_decay=0.001, num_iter=1000)
 # run_data_poisoning_multiple()

@@ -319,7 +319,7 @@ class GenericNeuralNet(object):
 
         print('Norm of the mean of gradients: %s' % np.linalg.norm(np.concatenate(grad_loss_val)))
         print('Norm of the params: %s' % np.linalg.norm(np.concatenate(params_val)))
-
+        return train_acc_val, test_acc_val, loss_no_reg_val, test_loss_val
 
 
     def retrain(self, num_steps, feed_dict):        
