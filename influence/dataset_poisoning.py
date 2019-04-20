@@ -55,7 +55,10 @@ def poison_with_influence_proj_gradient_step(model, indices_to_poison, grad_infl
     """
     poisoned_X_train_subset = project_fn(
         model.data_sets.train.x[indices_to_poison, :] - step_size * np.sign(grad_influence_wrt_input_val_subset) * 2.0 / 255.0)
-
+    print("poisoned_X_train_subset shape", np.shape(poisoned_X_train_subset))
+    print("grad_influence_wrt_input_val_subset shape", np.shape(grad_influence_wrt_input_val_subset))
+    exit()
+    
     print('-- max: %s, mean: %s, min: %s' % (
         np.max(grad_influence_wrt_input_val_subset),
         np.mean(grad_influence_wrt_input_val_subset),

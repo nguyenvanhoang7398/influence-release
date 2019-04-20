@@ -29,8 +29,7 @@ import influence.dataset as dataset
 from influence.dataset import DataSet
 from influence.dataset_poisoning import generate_inception_features
 
-
-def run_rbf_comparison():
+def test_inv_hvp():
     num_classes = 2
     num_train_ex_per_class = 900
     num_test_ex_per_class = 300
@@ -80,8 +79,6 @@ def run_rbf_comparison():
     use_bias = False
     decay_epochs = [1000, 10000]
 
-    tf.reset_default_graph()
-
     # X_train = image_data_sets.train.x
     # Y_train = image_data_sets.train.labels * 2 - 1
     train = DataSet(L_train, Y_train)
@@ -90,81 +87,61 @@ def run_rbf_comparison():
     data_sets = base.Datasets(train=train, validation=None, test=test)
     input_dim = data_sets.train.x.shape[1]
 
+    hinge_graph = tf.Graph()
+    smooth_hinge_graph = tf.Graph()
+
     # Train with hinge
-    rbf_model = SmoothHinge(
-        temp=0,
-        use_bias=use_bias,
-        input_dim=input_dim,
-        weight_decay=weight_decay,
-        num_classes=num_classes,
-        batch_size=batch_size,
-        data_sets=data_sets,
-        initial_learning_rate=initial_learning_rate,
-        keep_probs=keep_probs,
-        decay_epochs=decay_epochs,
-        mini_batch=False,
-        train_dir='output',
-        log_dir='log',
-        model_name='dogfish_rbf_hinge_t-0')
-        
-    rbf_model.train()
-    hinge_W = rbf_model.sess.run(rbf_model.params)[0]
+    with hinge_graph.as_default():
+        hinge_rbf_model = SmoothHinge(
+            temp=0,
+            use_bias=use_bias,
+            input_dim=input_dim,
+            weight_decay=weight_decay,
+            num_classes=num_classes,
+            batch_size=batch_size,
+            data_sets=data_sets,
+            initial_learning_rate=initial_learning_rate,
+            keep_probs=keep_probs,
+            decay_epochs=decay_epochs,
+            mini_batch=False,
+            train_dir='output',
+            log_dir='log',
+            model_name='dogfish_rbf_hinge_t-0')
+            
+        hinge_rbf_model.train()
+        hinge_W = hinge_rbf_model.sess.run(hinge_rbf_model.params)[0]
 
     # Then load weights into smoothed version
-    tf.reset_default_graph()
-    rbf_model = SmoothHinge(
-        temp=0.001,
-        use_bias=use_bias,
-        input_dim=input_dim,
-        weight_decay=weight_decay,
-        num_classes=num_classes,
-        batch_size=batch_size,
-        data_sets=data_sets,
-        initial_learning_rate=initial_learning_rate,
-        keep_probs=keep_probs,
-        decay_epochs=decay_epochs,
-        mini_batch=False,
-        train_dir='output',
-        log_dir='log',
-        model_name='dogfish_rbf_hinge_t-0.001')
+    with smooth_hinge_graph.as_default():
+        rbf_model = SmoothHinge(
+            temp=0.001,
+            use_bias=use_bias,
+            input_dim=input_dim,
+            weight_decay=weight_decay,
+            num_classes=num_classes,
+            batch_size=batch_size,
+            data_sets=data_sets,
+            initial_learning_rate=initial_learning_rate,
+            keep_probs=keep_probs,
+            decay_epochs=decay_epochs,
+            mini_batch=False,
+            train_dir='output',
+            log_dir='log',
+            model_name='dogfish_rbf_hinge_t-0.001')
 
-    params_feed_dict = {}
-    params_feed_dict[rbf_model.W_placeholder] = hinge_W
-    rbf_model.sess.run(rbf_model.set_params_op, feed_dict=params_feed_dict)
-    abs_weights = [abs(w) for w in hinge_W]
+        params_feed_dict = {}
+        params_feed_dict[rbf_model.W_placeholder] = hinge_W
+        rbf_model.sess.run(rbf_model.set_params_op, feed_dict=params_feed_dict)
 
-    x_test = [X_test[i] for i in test_idxs]
-    y_test = [Y_test[i] for i in test_idxs]
+    test_idx = 462
 
-    distances, flipped_idxs = {}, {}
-    for test_idx in test_idxs:
-        x_test = X_test[test_idx, :]
-        y_test = Y_test[test_idx]
-        distances[test_idx] = dataset.find_distances(x_test, X_train)
-        flipped_idxs[test_idx] = Y_train != y_test
-
-    rbf_margins_test = rbf_model.sess.run(rbf_model.margin, feed_dict=rbf_model.all_test_feed_dict)
-    rbf_margins_train = rbf_model.sess.run(rbf_model.margin, feed_dict=rbf_model.all_train_feed_dict)
-
-    influences = {}
-    correlation_list, margin_list = [], []
-    for i, test_idx in enumerate(test_idxs):
-        rbf_predicted_loss_diffs = rbf_model.get_influence_on_test_loss(
-            [test_idx],
+    hinge_inf_grads= rbf_model.get_grad_of_influence_wrt_input(
             np.arange(len(rbf_model.data_sets.train.labels)),
+            [test_idx],
             force_refresh=True)
-        influences[test_idx] = rbf_predicted_loss_diffs
-        correlation_list.append(np.corrcoef(abs_weights, rbf_predicted_loss_diffs)[0, 1])
-        margin_list.append(abs(rbf_margins_test[test_idx]))
 
-    result = {
-        'test_idxs': test_idxs,
-        'distances': distances,
-        'flipped_idxs': flipped_idxs,
-        'rbf_margins_test': rbf_margins_test,
-        'rbf_margins_train': rbf_margins_train,
-        'influences': influences,
-        'hinge_W': hinge_W
-    }
-
-    pickle.dump((result, correlation_list, margin_list), open('output/rbf_results.p', 'wb'))
+    smooth_hinge_inf_grads = rbf_model.get_grad_of_influence_wrt_input(
+            np.arange(len(rbf_model.data_sets.train.labels)),
+            [test_idx],
+            force_refresh=True)
+    np.testing.assert_array_equal(hinge_inf_grads, smooth_hinge_inf_grads)
