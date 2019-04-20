@@ -4,6 +4,7 @@ import numpy as np
 import sklearn.linear_model as linear_model
 from scripts.load_animals import load_animals, load_dogfish_with_koda, load_dogfish_with_orig_and_koda
 import copy
+from sklearn.decomposition import PCA, KernelPCA
 
 import os
 from shutil import copyfile
@@ -21,6 +22,8 @@ from influence.smooth_hinge import SmoothHinge
 import influence.experiments
 from influence.dataset import DataSet
 from influence.dataset_poisoning import iterative_attack, select_examples_to_attack, get_projection_to_box_around_orig_point
+
+pca_kernel = None
 
 def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_graph, project_fn, test_indices, test_description=None, 
     indices_to_poison=None,
@@ -68,27 +71,26 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
                 test_description=test_description,
                 loss_type=loss_type)
             poisoned_X_train_subset = poison_with_influence_proj_gradient_step(
-                raw_train.x, 
-                indices_to_poison,
+                smooth_hinge.data_sets.train.x, 
+                eff_indices_to_poison,
                 grad_influence_wrt_input_val_subset,
                 step_size,
                 project_fn)
         
         with smooth_hinge_graph.as_default():
-            snapshot_raw_X_train = copy.deepcopy(raw_train.x)
-            snapshot_raw_X_train[indices_to_poison] = poisoned_raw_X_train_subset
-            poisoned_kernelized_X_train = kernelize(snapshot_raw_X_train)
-            poisoned_kernelized_X_train_subset = poisoned_kernelized_X_train[indices_to_poison]
-            smooth_hinge_graph.update_train_x(poisoned_kernelized_X_train_subset)
+            smooth_hinge.update_train_x(poisoned_X_train_subset)
+            full_X_train = hinge.data_sets.train.x
+            full_X_train[indices_to_poison] = poisoned_X_train_subset
+            reconstructed_poisoned_X_train_subset = inverse_kernelize_pca(poisoned_X_train_subset)
 
         with hinge_graph.as_default():
-            hinge_graph.update_train_x(poisoned_kernelized_X_train)
+            hinge.update_train_x(full_X_train)
 
         # Retrain model
         print('Training...')
         with hinge_graph.as_default():
             hinge.train()
-            hinge_W = hinge.sess.run(hinge_rbf_model.params)[0]
+            hinge_W = hinge.sess.run(hinge.params)[0]
         with smooth_hinge_graph.as_default():
             params_feed_dict = {}
             params_feed_dict[smooth_hinge.W_placeholder] = hinge_W
@@ -107,8 +109,8 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
                 if test_pred[0, int(smooth_hinge.data_sets.test.labels[test_indices])] < early_stop:
                     print('Successfully attacked. Saving and breaking...')
                     np.savez('output/%s_attack_%s_testidx-%s_trainidx-%s_stepsize-%s_proj_final' % (smooth_hinge.model_name, loss_type, test_description, train_idx_str, step_size), 
-                        poisoned_X_train_image=poisoned_X_train_subset, 
-                        poisoned_X_train_inception_features=inception_X_train_subset,
+                        reconstructed_poisoned_X_train_subset=reconstructed_poisoned_X_train_subset, 
+                        poisoned_X_train_subset=poisoned_X_train_subset,
                         Y_train=labels_subset,
                         indices_to_poison=indices_to_poison,
                         attack_iter=attack_iter + 1,
@@ -128,7 +130,7 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
 
     return False
 
-def kernelize(X_train, X_test=None):
+def kernelize_rbf(X_train, X_test=None):
     num_train = X_train.shape[0]
 
     if X_test is not None:    
@@ -143,6 +145,26 @@ def kernelize(X_train, X_test=None):
     L_train = L[:num_train, :num_train]
     L_test = L[num_train:, :num_train]
     return L_train, L_test
+
+def kernelize_simple(X_train, X_test=None):
+    return X_train, X_test
+
+def inverse_kernel_simple(X_test):
+    return X_test
+
+def kernelize_pca(X_train, X_test=None):
+    global pca_kernel
+    pca_kernel = KernelPCA(kernel="rbf", fit_inverse_transform=True)
+
+    L_train = pca_kernel.fit_transform(X_train)
+    L_test = None
+    if X_test is not None:
+        L_test = pca_kernel.transform(X_test)
+    return L_train, L_test
+
+def inverse_kernelize_pca(X_test):
+    global pca_kernel
+    return pca_kernel.inverse_transform(X_test)
 
 def poison_with_influence_proj_gradient_step(raw_X_train, indices_to_poison, grad_influence_wrt_input_val_subset, step_size, project_fn):
     print("raw_X_train", np.shape(raw_X_train))
@@ -181,8 +203,10 @@ def run_adversarial_atk_svm():
     num_train = X_train.shape[0]
     num_test = X_test.shape[0]
 
-    L_train, L_test = kernelize(X_train, X_test)
-
+    L_train, L_test = kernelize_pca(X_train, X_test)
+    print(np.shape(L_train), np.shape(L_test))
+    print(np.shape(X_train), np.shape(X_test))
+    # exit()
     ## RBF
 
     input_channels = 1
@@ -265,6 +289,13 @@ def run_adversarial_atk_svm():
                 force_refresh=False,
                 test_description=test_description,
                 loss_type='normal_loss')
+        print('****')
+        print('Grad of influence at start')
+        print('-- max: %s, mean: %s, min: %s' % (
+            np.max(grad_influence_wrt_input_val),
+            np.mean(grad_influence_wrt_input_val),
+            np.min(grad_influence_wrt_input_val)))
+        print('****')
         indices_to_poison = select_examples_to_attack(
                 rbf_model, 
                 max_num_to_poison, 
@@ -274,13 +305,12 @@ def run_adversarial_atk_svm():
     print('Indices to poison: %s' % indices_to_poison)
     print('****')
 
-    idx_to_poison = indices_to_poison[0]
-    orig_X_train_subset = np.copy(rbf_model.data_sets.train.x[idx_to_poison, :])
+    orig_X_train_subset = np.copy(rbf_model.data_sets.train.x[indices_to_poison, :])
 
     project_fn = get_projection_to_box_around_orig_point(orig_X_train_subset, box_radius_in_pixels=0.5)
     # project_fn = lambda x : x
     iterative_attack(raw_train, hinge_rbf_model, rbf_model, hinge_graph, smooth_hinge_graph, project_fn, test_indices, test_description=test_description, 
-        indices_to_poison=[idx_to_poison],
+        indices_to_poison=indices_to_poison,
         num_iter=2000,
         step_size=step_size,
         save_iter=500,
