@@ -62,9 +62,14 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
     print('Indices to poison: %s' % indices_to_poison)
 
     for attack_iter in range(num_iter):
+        force_grad = False
         print('*** Iter: %s' % attack_iter)
         with smooth_hinge_graph.as_default():
-            if attack_target == "grad":
+            if attack_target == "sv":
+                smooth_hinge_margins_train = smooth_hinge.sess.run(smooth_hinge.margin, feed_dict=smooth_hinge.all_train_feed_dict)
+                indices_to_poison = [idx for idx, margin in enumerate(smooth_hinge_margins_train) if margin == 1.0][:max_num_to_poison]
+                force_grad = len(indices_to_poison) < max_num_to_poison
+            if attack_target == "grad" or force_grad:
                 grad_influence_wrt_input_val = smooth_hinge.get_grad_of_influence_wrt_input(
                     range(num_train), 
                     test_indices, 
@@ -75,11 +80,8 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
                         smooth_hinge, 
                         max_num_to_poison, 
                         grad_influence_wrt_input_val,
-                        step_size=step_size)
-            elif attack_target == "sv":
-                smooth_hinge_margins_train = smooth_hinge.sess.run(smooth_hinge.margin, feed_dict=smooth_hinge.all_train_feed_dict)
-                indices_to_poison = [idx for idx, margin in enumerate(smooth_hinge_margins_train) if margin == 1.0]
-            else:
+                        step_size=step_size) 
+            elif not force_grad:
                 raise Exception("Unrecognised attack target {}".format(attack_target))
             print('Poisoning indices', indices_to_poison)
             print('Calculating grad...')
@@ -142,7 +144,7 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
         if (attack_iter+1) % save_iter == 0:
             np.savez('output/%s_attack_%s_testidx-%s_trainidx-%s_stepsize-%s_proj_iter-%s' % (smooth_hinge_model_name, loss_type, test_description, train_idx_str, step_size, attack_iter+1), 
                 poisoned_X_train_subset=poisoned_X_train_subset, 
-                poisoned_kernelized_X_train_subset=poisoned_kernelized_X_train_subset,
+		reconstructed_poisoned_X_train_subset=reconstructed_poisoned_X_train_subset,
                 Y_train=labels_subset,
                 indices_to_poison=indices_to_poison,
                 attack_iter=attack_iter + 1,
