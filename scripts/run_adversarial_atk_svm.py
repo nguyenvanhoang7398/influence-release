@@ -32,14 +32,15 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
     save_iter=1,
     loss_type='normal_loss',
     early_stop=None,
-    max_num_to_poison=10):
+    max_num_to_poison=10,
+    attack_target="grad"):
     # If early_stop is set and it stops early, returns True
     # Otherwise, returns False
 
     train_acc, test_acc = [], []
     train_loss, test_loss = [], []
     grad_means = []
-    metrics_output_path = "output/metrics_{}wd_{}iter.p".format(smooth_hinge.weight_decay, num_iter)
+    metrics_output_path = "output/metrics_{}-wd_{}-iter_{}-atk.p".format(smooth_hinge.weight_decay, num_iter, attack_target)
 
     if test_description is None:
         test_description = test_indices
@@ -60,26 +61,26 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
     print('Test idx: %s' % test_indices)
     print('Indices to poison: %s' % indices_to_poison)
 
-    # smooth_hinge.update_train_x_y(
-    #     smooth_hinge.data_sets.train.x[indices_to_poison, :],
-    #     smooth_hinge.data_sets.train.labels[indices_to_poison])
-    # eff_indices_to_poison = np.arange(len(indices_to_poison))
-    # labels_subset = smooth_hinge.data_sets.train.labels[eff_indices_to_poison]
-
     for attack_iter in range(num_iter):
         print('*** Iter: %s' % attack_iter)
         with smooth_hinge_graph.as_default():
-            grad_influence_wrt_input_val = smooth_hinge.get_grad_of_influence_wrt_input(
-                range(num_train), 
-                test_indices, 
-                force_refresh=False,
-                test_description=test_description,
-                loss_type='normal_loss')
-            indices_to_poison = select_examples_to_attack(
-                    smooth_hinge, 
-                    max_num_to_poison, 
-                    grad_influence_wrt_input_val,
-                    step_size=step_size)
+            if attack_target == "grad":
+                grad_influence_wrt_input_val = smooth_hinge.get_grad_of_influence_wrt_input(
+                    range(num_train), 
+                    test_indices, 
+                    force_refresh=False,
+                    test_description=test_description,
+                    loss_type='normal_loss')
+                indices_to_poison = select_examples_to_attack(
+                        smooth_hinge, 
+                        max_num_to_poison, 
+                        grad_influence_wrt_input_val,
+                        step_size=step_size)
+            elif attack_target == "sv":
+                smooth_hinge_margins_train = smooth_hinge.sess.run(smooth_hinge.margin, feed_dict=smooth_hinge.all_train_feed_dict)
+                indices_to_poison = [idx for idx, margin in enumerate(smooth_hinge_margins_train) if margin == 1.0]
+            else:
+                raise Exception("Unrecognised attack target {}".format(attack_target))
             print('Poisoning indices', indices_to_poison)
             print('Calculating grad...')
             labels_subset = smooth_hinge.data_sets.train.labels[indices_to_poison]
@@ -139,7 +140,7 @@ def iterative_attack(raw_train, hinge, smooth_hinge, hinge_graph, smooth_hinge_g
                     return True
 
         if (attack_iter+1) % save_iter == 0:
-            np.savez('output/%s_attack_%s_testidx-%s_trainidx-%s_stepsize-%s_proj_iter-%s' % (full_model.model_name, loss_type, test_description, train_idx_str, step_size, attack_iter+1), 
+            np.savez('output/%s_attack_%s_testidx-%s_trainidx-%s_stepsize-%s_proj_iter-%s' % (smooth_hinge_model_name, loss_type, test_description, train_idx_str, step_size, attack_iter+1), 
                 poisoned_X_train_subset=poisoned_X_train_subset, 
                 poisoned_kernelized_X_train_subset=poisoned_kernelized_X_train_subset,
                 Y_train=labels_subset,
@@ -207,7 +208,7 @@ def poison_with_influence_proj_gradient_step(raw_X_train, indices_to_poison, gra
 
     return poisoned_X_train_subset
 
-def run_adversarial_atk_svm(weight_decay, num_iter):
+def run_adversarial_atk_svm(weight_decay, num_iter, attack_target):
     num_classes = 2
     num_train_ex_per_class = 900
     num_test_ex_per_class = 300
@@ -340,6 +341,7 @@ def run_adversarial_atk_svm(weight_decay, num_iter):
         indices_to_poison=indices_to_poison,
         num_iter=num_iter,
         step_size=step_size,
-        save_iter=500,
+        save_iter=10,
         loss_type='normal_loss',
-        max_num_to_poison=max_num_to_poison)
+        max_num_to_poison=max_num_to_poison,
+        attack_target=attack_target)
